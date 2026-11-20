@@ -10,6 +10,13 @@ Most names need no directive: a function or variable called func_XXXXXXXX or
 data_XXXXXXXX carries its address in every decoration the compiler gives it
 (?func_0012A340@Foo@@QAEXH@Z, _func_0012A340@8, @func_0012A340@8,
 ?data_001EFC88@@3HA), so nothing is declared and nothing can be misdeclared.
+
+Folded functions. When the linker folded identical functions into one (a bare
+`ret` that is a dozen different empty virtual functions, two slots of the same
+vtable), that one address stands for several source functions, which C++
+cannot give one name. For an address listed under [names] folded in xbx.toml
+a unit may also write func_XXXXXXXX_1 ... func_XXXXXXXX_99: the same address,
+and each alias is its own name for the one-address-one-declaration rule.
 """
 import os
 import re
@@ -21,7 +28,7 @@ CONST = re.compile(r'^[ \t]*/\*\s*const:\s*(0[xX][0-9A-Fa-f]+)\s*\*/[ \t]*$', re
 FUZZY = re.compile(r'^[ \t]*/\*\s*fuzzy:\s*(\d+(?:\.\d+)?)\s*\*/[ \t]*$', re.M)
 UNIT_ADDRESS = re.compile(r'func_([0-9A-Fa-f]{8})\.(?:cpp|c)$')
 # the identifier comes first in every decoration: optional __imp_, then one of ? _ @
-PLACEHOLDER = re.compile(r'^(?:__imp_)?[?_@]?(func|data)_([0-9A-Fa-f]{8})(?![0-9A-Za-z_])')
+PLACEHOLDER = re.compile(r'^(?:__imp_)?[?_@]?(func|data)_([0-9A-Fa-f]{8})(?:_([1-9][0-9]?))?(?![0-9A-Za-z_])')
 
 # names the C runtime defines as absolute values rather than addresses in the image
 ABSOLUTE = {'__except_list': 0}
@@ -43,6 +50,18 @@ def placeholder(name):
     """(kind, address) when a decorated name is an address-carrying placeholder, else None."""
     m = PLACEHOLDER.match(name)
     return (m.group(1), int(m.group(2), 16)) if m else None
+
+
+def alias(name):
+    """N for func_XXXXXXXX_N (a folded function's alias), else 0."""
+    m = PLACEHOLDER.match(name)
+    return int(m.group(3)) if m and m.group(3) else 0
+
+
+def slot(name, addr):
+    """What the one-address-one-declaration rule keys on: the address, and the
+    alias for a folded function's other names."""
+    return (addr, alias(name))
 
 
 def unit_address(path):

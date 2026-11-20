@@ -44,6 +44,10 @@ xbx.toml:
     start = "0x00140000"              # (made-up numbers)
     end = "0x00148000"
     owner = "lib:example"
+
+    [names]
+    folded = ["0x00011c90"]           # functions the linker folded together (made-up number):
+                                      # units may also call it func_00011C90_1, _2, ... (units.py)
 """
 import csv
 import functools
@@ -107,6 +111,7 @@ class Project:
         self.headline = list(owners.get('headline', ['game']))
         self.section_owners = dict(owners.get('sections', {}))
         self.owner_ranges = [(int(r['start'], 16), int(r['end'], 16), r['owner']) for r in owners.get('ranges', [])]
+        self.folded = frozenset(int(a, 16) for a in c.get('names', {}).get('folded', []))
         self.out = os.path.abspath(os.environ.get('XBX_OUT') or self.path('build/xbx'))
 
     def path(self, relative):

@@ -221,3 +221,32 @@ def test_weak_external_falls_back_to_its_default():
     assert v.covers == [0x11100]
     project.image.write(0x20020, struct.pack('<I', CALLEE))    # the slot points somewhere else
     assert not verdict(project, obj, unit).ok
+
+
+def test_weak_default_named_by_an_undefined_entry():
+    """What cl 13.00 writes: the weak ??_E falls back to an undefined ??_G entry,
+    and a second entry of the same name is the COMDAT that defines it. Both
+    gates must place and compare that COMDAT."""
+    code = bytes.fromhex('c7 01 00000000 c3')
+    deleter = bytes.fromhex('c2 0400')
+    project = new_project({FUNC: len(code), CALLEE: 1, 0x11100: len(deleter)})
+    obj = coff.Coff(cofftool.build(
+        [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1, relocs=[(2, '??_7Thing@@6B@', coff.REL_DIR32)]),
+         dict(name='.text', data=deleter, flags=cofftool.TEXT, comdat=2),
+         dict(name='.rdata', data=bytes(4), flags=cofftool.RDATA, comdat=2,
+              relocs=[(0, '??_EThing@@UAEPAXI@Z', coff.REL_DIR32)])],
+        [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION),
+         dict(name='??_GThing@@UAEPAXI@Z', section=2, type=cofftool.FUNCTION),
+         dict(name='??_GThing@@UAEPAXI@Z', type=cofftool.FUNCTION),    # the entry the weak default names
+         dict(name='??_7Thing@@6B@', section=3),
+         dict(name='??_EThing@@UAEPAXI@Z', type=cofftool.FUNCTION, storage=coff.CLASS_WEAK,
+              default='??_GThing@@UAEPAXI@Z')]))
+    blocks = {b.name: b for b in obj.blocks()}
+    placement = {blocks[FUNC_NAME].key: FUNC, blocks['??_7Thing@@6B@'].key: 0x20020,
+                 blocks['??_GThing@@UAEPAXI@Z'].key: 0x11100}
+    unit = unit_for()
+    for addr, data in build_gate.link(project, obj, unit, placement):
+        project.image.write(addr, data)
+    v = verdict(project, obj, unit)
+    assert v.ok, v.problems
+    assert v.covers == [0x11100]

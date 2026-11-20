@@ -112,6 +112,9 @@ class Matcher:
         """The retail address of an external name, or None when nothing maps it."""
         hit = units.placeholder(name)
         if hit:
+            if units.alias(name) and v is not None and (hit[0] != 'func' or hit[1] not in self.project.folded):
+                v.problems.append(f'{name}: an alias (_N) is only for a folded function, and {hit[1]:#x} is not '
+                                  'listed under [names] folded in xbx.toml')
             return hit[1]
         if name in units.ABSOLUTE:
             return units.ABSOLUTE[name]
@@ -212,7 +215,8 @@ class Matcher:
         def carries(block):
             for s in block.symbols:
                 hit = units.placeholder(s.name)
-                if hit and hit[0] == 'func' and hit[1] == unit.addr and want in s.name.lower():
+                if hit and hit[0] == 'func' and hit[1] == unit.addr and not units.alias(s.name) \
+                        and want in s.name.lower():
                     return True
             return False
 
@@ -328,6 +332,8 @@ class Matcher:
         if sym.section == 0 and sym.storage == coff.CLASS_WEAK and sym.default >= 0 \
                 and self.resolve(sym.name, unit, v) is None:
             sym = obj.symbol(sym.default)           # nothing else defines it: the linker uses the fallback
+        if sym.section == 0 and obj.definition(sym.name) is not None:
+            sym = obj.definition(sym.name)          # defined under another entry of the same name
         if sym.section == -1:                       # an absolute symbol
             if (sym.value + addend) & 0xFFFFFFFF != target:
                 differs(f'{where}: {sym.name} is {sym.value:#x}, retail has {target:#x}')

@@ -249,6 +249,27 @@ So in such a unit every virtual function is declared in slot order and named `fu
 in its slot. Run `xbx match` once with any names: the `?` lines give the address each slot implies. Code the
 compiler generates for the class (a deleting destructor, for example) is placed and compared in the same way.
 
+#### Folded functions
+
+The linker folds identical functions into one: a bare `ret` can be a dozen different empty virtual functions,
+and then fills several slots of one vtable. C++ cannot give two of a class's virtual functions the same name,
+so an address the project lists under `[names] folded` in `xbx.toml` may also be written
+`func_XXXXXXXX_1`, `func_XXXXXXXX_2`, ... up to `_99`. Each alias is the same address and counts as an address
+of its own for the one-declaration rule, so number them in slot order within a class:
+
+```cpp
+struct Node {
+    virtual ~Node();
+    virtual void func_00011C90();       // slot 1
+    virtual void func_00011C90_1();     // slot 2: the same folded function
+    virtual void func_00011C80(int);    // slot 3
+    virtual void func_00011C90_2();     // slot 4
+};
+```
+
+The evidence for a folded address is one function filling two slots of the same vtable. An alias on an address
+that is not listed is refused; ask a maintainer to list it.
+
 ## `/* sym: */`: special members
 
 Constructors, destructors, operators and vtables have decorated names that start with `??` and cannot carry an

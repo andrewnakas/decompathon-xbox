@@ -60,6 +60,8 @@ def link(project, obj, unit, placement):
             sym = obj.symbol(r.symbol)
             if sym.section == 0 and sym.storage == coff.CLASS_WEAK and sym.default >= 0 and external(sym.name) is None:
                 sym = obj.symbol(sym.default)
+            if sym.section == 0 and obj.definition(sym.name) is not None:
+                sym = obj.definition(sym.name)      # defined under another entry of the same name
             if sym.section == -1:
                 value = sym.value + addend
             elif sym.section > 0:

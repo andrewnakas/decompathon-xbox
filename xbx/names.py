@@ -27,7 +27,8 @@ def _path(project):
 
 
 def index(project, compiler, skip=()):
-    """{address: (decorated name, unit path relative to the project)} from the matched tier.
+    """{(address, alias): (decorated name, unit path relative to the project)} from the
+    matched tier. The alias is 0 except for a folded function's other names (units.py).
     skip: unit paths to leave out (the ones being checked against the index)."""
     path = _path(project)
     stored = {}
@@ -70,12 +71,12 @@ def index(project, compiler, skip=()):
             continue
         addr = units.unit_address(rel)
         if entry['defines']:
-            out[addr] = (entry['defines'], rel)          # the defining unit's name wins the listing
+            out[(addr, 0)] = (entry['defines'], rel)     # the defining unit's name wins the listing
     for rel, entry in sorted(current.items()):
         if rel in skip:
             continue
         for name, addr in entry['links'].items():
-            out.setdefault(addr, (name, rel))
+            out.setdefault(units.slot(name, addr), (name, rel))
     return out
 
 
@@ -86,7 +87,7 @@ def conflicts(known, v, project):
     for name, addr in list(v.links.items()) + ([(v.defines, v.addr)] if v.defines else []):
         if name in shared or name in units.ABSOLUTE:
             continue
-        seen = known.get(addr)
+        seen = known.get(units.slot(name, addr))
         if seen and seen[0] != name:
             out.append(f'{addr:#x} is declared as {name} here and as {seen[0]} in {seen[1]}: '
                        'one address, one declaration (use the same class, calling convention and types)')
@@ -104,12 +105,15 @@ def main(argv=None):
         known = index(project, toolchain.for_project(project))
     except (project_module.ProjectError, ToolError) as e:
         sys.exit(f'error: {e}')
-    wanted = [int(a, 16) for a in args.addresses] or sorted(known)
+    wanted = [int(a, 16) for a in args.addresses] or sorted({addr for addr, _ in known})
     for addr in wanted:
-        if addr in known:
-            print(f'{addr:08X}  {known[addr][0]}  ({known[addr][1]})')
-        else:
+        slots = sorted(k for k in known if k[0] == addr)
+        for key in slots:
+            print(f'{addr:08X}  {known[key][0]}  ({known[key][1]})')
+        if not slots:
             print(f'{addr:08X}  not declared by any matched unit yet: yours will be the first')
+        if addr in project.folded:
+            print(f'{addr:08X}  folded: other source functions here are named func_{addr:08X}_1, _2, ...')
 
 
 if __name__ == '__main__':

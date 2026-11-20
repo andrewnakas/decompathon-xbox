@@ -5,7 +5,8 @@ Each unit is compiled with the pinned compiler and flags and compared with the
 retail executable under the strict rules of `xbx match --strict`. Then, across
 all of them:
   - one name means one address
-  - one address is declared one way: a function or variable that two units
+  - one address is declared one way (a folded function's aliases each count
+    as an address of their own, units.py): a function or variable that two units
     refer to must have the same decorated name in both (same class, calling
     convention, parameter types), and that is the name its own unit defines.
     The units can then be linked against each other; the judge's message
@@ -47,7 +48,7 @@ def run(project):
             if seen[0] != target:
                 report.problem(unit.path, f'{name} is {target:#x} here and {seen[0]:#x} in '
                                           f'{project.relative(seen[1])}')
-            seen = by_addr.setdefault(target, (name, unit.path))
+            seen = by_addr.setdefault(units.slot(name, target), (name, unit.path))
             if seen[0] != name:
                 report.problem(unit.path, f'{target:#x} is declared as {name} here and as {seen[0]} in '
                                           f'{project.relative(seen[1])}: one address, one declaration '

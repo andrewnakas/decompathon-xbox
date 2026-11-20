@@ -100,3 +100,40 @@ def test_scan_refusals():
     # a block followed by a bare expression is still refused
     assert any('bare expression' in p for p in problems('void f(int x) { if (x) { x++; } m_count; }'))
     assert any('fuzzy' in p for p in problems('int x;', tier='nonmatching'))
+
+
+def test_folded_function_aliases():
+    from xbx import units
+    assert units.placeholder('?func_00011C90_2@Node@@UAEXXZ') == ('func', 0x11c90)
+    assert units.alias('?func_00011C90_2@Node@@UAEXXZ') == 2 and units.alias('?func_00011C90@Node@@UAEXXZ') == 0
+    assert units.slot('?func_00011C90_12@A@@UAEXXZ', 0x11c90) == (0x11c90, 12)
+    for name in ('?func_00011C90_x@A@@UAEXXZ', '_func_00011C90_100', '_func_00011C90_0', '_func_00011C90_'):
+        assert units.placeholder(name) is None, name
+
+
+class _Folded:
+    folded = frozenset({0x11c90})
+    shared_symbols = {}
+
+
+def test_each_alias_is_declared_one_way():
+    from xbx import match, names
+    known = {(0x11c90, 0): ('?func_00011C90@Node@@UAEXXZ', 'src/funcs/func_00011C90.cpp'),
+             (0x11c90, 1): ('?func_00011C90_1@Node@@UAEXXZ', 'src/funcs/func_00011000.cpp')}
+    v = match.Verdict(0x12000)
+    v.links = {'?func_00011C90_2@Other@@UAEXXZ': 0x11c90}          # a new alias: free
+    assert names.conflicts(known, v, _Folded()) == []
+    v.links = {'?func_00011C90_1@Other@@UAEXXZ': 0x11c90}          # alias 1 is Node's already
+    assert len(names.conflicts(known, v, _Folded())) == 1
+
+
+def test_an_alias_needs_a_listed_folded_function():
+    from xbx import match, units
+    m = object.__new__(match.Matcher)
+    m.project = _Folded()
+    unit = units.parse('', 'src/funcs/func_00012000.cpp')
+    v = match.Verdict(0x12000)
+    assert m.resolve('?func_00011C90_3@A@@UAEXXZ', unit, v) == 0x11c90 and v.problems == []
+    assert m.resolve('?func_00012100_1@A@@UAEXXZ', unit, v) == 0x12100
+    assert v.problems and 'folded' in v.problems[0]
+    assert m.resolve('?data_00011C90_1@@3HA', unit, match.Verdict(0x12000)) == 0x11c90

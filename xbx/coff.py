@@ -168,6 +168,7 @@ class Coff:
                     if sec.flags & LNK_COMDAT and not sec.comdat:
                         sec.comdat, sec.associated = selection, number
         self._blocks = None
+        self._definitions = None
 
     def symbol(self, index):
         try:
@@ -177,6 +178,18 @@ class Coff:
 
     def section(self, index):
         return self.sections[index - 1]
+
+    def definition(self, name):
+        """The symbol that defines an external name in this object, or None. A
+        reference can name an undefined entry while another entry of the same
+        name defines it (MSVC does this for the deleting destructor a vtable's
+        weak slot falls back to); the linker joins them by name."""
+        if self._definitions is None:
+            self._definitions = {}
+            for sym in self.symbols:
+                if sym.defined and sym.storage == CLASS_EXTERNAL:
+                    self._definitions.setdefault(sym.name, sym)
+        return self._definitions.get(name)
 
     def _is_section_symbol(self, sym):
         return (sym.storage == CLASS_STATIC and sym.value == 0 and sym.section > 0
