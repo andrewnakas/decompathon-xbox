@@ -160,3 +160,13 @@ def test_adjustor_thunks_are_compiler_made():
     assert units.is_adjustor('?Release@Object_001E3A5C@@W3AGKXZ')
     assert not units.is_adjustor('?AddRef@MemStream@@UAGKXZ')
     assert not units.is_adjustor('??_GMemStream@@UAEPAXI@Z')
+
+
+def test_an_override_named_with_an_alias_is_checked_against_its_address():
+    from xbx import match, names, units
+    assert units.slot('?func_00011C90_4@Object_00114FD0@@UAEXXZ', 0x114fe0) == (0x114fe0, 0)
+    assert units.slot('?func_00011C90_4@Node@@UAEXXZ', 0x11c90) == (0x11c90, 4)
+    known = {(0x114fe0, 0): ('?func_00114FE0@Object_00114FE0@@QAEXXZ', 'src/funcs/func_00114FE0.cpp')}
+    v = match.Verdict(0x114fd0)
+    v.links = {'?func_00011C90_4@Object_00114FD0@@UAEXXZ': 0x114fe0}
+    assert len(names.conflicts(known, v, _Folded())) == 1

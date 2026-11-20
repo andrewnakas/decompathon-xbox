@@ -71,8 +71,11 @@ def alias(name):
 
 def slot(name, addr):
     """What the one-address-one-declaration rule keys on: the address, and the
-    alias for a folded function's other names."""
-    return (addr, alias(name))
+    alias for a folded function's other names. An override's name that carries
+    an alias of another address (func_00011C90_4 given 0x114FE0 by a sym line)
+    is keyed on its address alone, so it is compared with that address's name."""
+    hit = placeholder(name)
+    return (addr, alias(name) if hit and hit[1] == addr else 0)
 
 
 # after the class qualifiers, a member function's access code; these are the virtual ones
