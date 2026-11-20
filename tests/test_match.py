@@ -347,3 +347,20 @@ def test_an_inline_special_member_called_out_of_line():
     assert v.ok and v.covers == [0x11100], v.problems
     assert not case('??1Base@@QAE@XZ', b'\xcc').ok
     assert any('second function' in p for p in case('?helper@@YAXXZ', b'\xc3').problems)
+
+
+def test_data_a_function_keeps_in_its_own_code():
+    """A table inside a function's row (the function jumps over it) can be named as data only when the
+    project lists it under [names] data_in_code."""
+    code = bytes.fromhex('a1 00000000 c3')                          # mov eax, [data_00011104]; ret
+    project = new_project({FUNC: len(code), 0x11100: 0x20})
+    project.image.write(FUNC, code[:1] + struct.pack('<I', 0x11104) + code[5:])
+    obj = coff.Coff(cofftool.build(
+        [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1,
+              relocs=[(1, '?data_00011104@@3HA', coff.REL_DIR32)])],
+        [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION), dict(name='?data_00011104@@3HA')]))
+    v = verdict(project, obj, unit_for())
+    assert any('code section' in p for p in v.problems)
+    project.data_in_code = [(0x11104, 0x11110)]
+    v = verdict(project, obj, unit_for())
+    assert v.ok, v.problems

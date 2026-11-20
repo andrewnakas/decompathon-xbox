@@ -48,6 +48,8 @@ xbx.toml:
     [names]
     folded = ["0x00011c90"]           # functions the linker folded together (made-up number):
                                       # units may also call it func_00011C90_1, _2, ... (units.py)
+    data_in_code = [["0x00011d00", "0x00011d20"]]   # data a function keeps inside its own code (a table
+                                      # it jumps over): units may refer to it as data_XXXXXXXX
 """
 import csv
 import functools
@@ -112,7 +114,12 @@ class Project:
         self.section_owners = dict(owners.get('sections', {}))
         self.owner_ranges = [(int(r['start'], 16), int(r['end'], 16), r['owner']) for r in owners.get('ranges', [])]
         self.folded = frozenset(int(a, 16) for a in c.get('names', {}).get('folded', []))
+        self.data_in_code = [(int(a, 16), int(b, 16)) for a, b in c.get('names', {}).get('data_in_code', [])]
         self.out = os.path.abspath(os.environ.get('XBX_OUT') or self.path('build/xbx'))
+
+    def data_in_code_at(self, addr):
+        """Whether addr is in data that a function keeps inside its own code."""
+        return any(start <= addr < end for start, end in self.data_in_code)
 
     def path(self, relative):
         return relative if os.path.isabs(relative) else os.path.join(self.root, relative)

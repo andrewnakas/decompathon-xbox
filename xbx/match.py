@@ -448,8 +448,10 @@ class Matcher:
             elif row is None:
                 message = f'{where}: {sym.name} at {known:#x} is not a function start in the function table'
                 (v.problems if self.strict else v.notes).append(message)
-        elif hit and hit[0] == 'data' and in_code and self.strict:
-            v.problems.append(f'{where}: {sym.name} is in a code section; declare it as the function it is')
+        elif hit and hit[0] == 'data' and in_code and self.strict and not self.project.data_in_code_at(known):
+            v.problems.append(f'{where}: {sym.name} is in a code section; declare it as the function it is '
+                              '(data that a function keeps inside its own code is listed under [names] '
+                              'data_in_code in xbx.toml)')
 
     def _strays(self, obj, unit, v, primary, addr):
         """Numbers inside the image's address range that no relocation covers."""

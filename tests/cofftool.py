@@ -111,6 +111,11 @@ class Project:
                      for a, n in functions.items()}
         self.starts = set(self.rows)
         self.shared_symbols = {}
+        self.folded = frozenset()
+        self.data_in_code = []
+
+    def data_in_code_at(self, addr):
+        return any(start <= addr < end for start, end in self.data_in_code)
 
     def relative(self, path):
         return path
