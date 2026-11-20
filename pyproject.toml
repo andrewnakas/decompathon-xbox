@@ -20,5 +20,8 @@ xbx = "xbx.cli:main"
 [tool.setuptools]
 packages = ["xbx", "xbx.gates", "xbx.workbench"]
 
+[tool.setuptools.package-data]
+xbx = ["template/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

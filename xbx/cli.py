@@ -7,6 +7,7 @@ import sys
 
 # command -> (module, one-line help). Modules are imported on use.
 COMMANDS = {
+    'init':       ('xbx.scaffold', 'start a new game project from your own XBE'),
     'xbe':        ('xbx.xbe', 'summarise an XBE: sections, libraries, kernel imports'),
     'xiso':       ('xbx.xiso', 'list or extract the files of an Xbox disc image'),
     'functions':  ('xbx.functions', 'count the functions function discovery finds in an XBE'),

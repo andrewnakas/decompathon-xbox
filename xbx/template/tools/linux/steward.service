@@ -1,0 +1,23 @@
+# systemd user unit for the @@TITLE@@ (Xbox) decomp (no AI, no Discord):
+#   cp tools/linux/@@SHORT@@-steward.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now @@SHORT@@-steward
+# Runs alongside any other Steward units: own judge workspace, own data and log dir.
+# The judge workspace is a clone of the repo with your own default.xbe in orig/ and your own @@COMPILER@@
+# under toolchain/msvc (or XBX_XBE, XBX_MSVC and XBX_WINEPREFIX set in this unit). Gates run tools/gate.sh,
+# which keeps the workspace's .venv on the xbx commit pinned in requirements.txt. That needs uv and wine on
+# PATH, hence %h/.local/bin below.
+[Unit]
+Description=Decompathon Steward (@@NAME@@, no AI) under its watchdog
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/decompathon-steward
+Environment=PATH=%h/decompathon-steward/.venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/decompathon-steward/.venv/bin/python -u -m steward.watchdog --log-dir %h/.decompathon/@@SHORT@@ --module steward.daemon -- --repo @@REPO@@ --app decompathon-steward --no-ai --judge-workspace %h/@@SHORT@@-judge
+Nice=5
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,2 @@
+# The xbx tools, pinned by commit. tools/gate.sh installs exactly this into .venv.
+decompathon-xbox @ git+https://github.com/andrewnakas/decompathon-xbox@@@TOOLS_PIN@@

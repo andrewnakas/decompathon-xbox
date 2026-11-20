@@ -22,6 +22,7 @@ copy of the compiler.
 
 | Command | What it does |
 |---|---|
+| `xbx init DIR` | Start a new game project from your own XBE: config, function table, gates, rules and guides |
 | `xbx xbe FILE` | Summary of an XBE: sections, linked libraries and their versions, kernel imports |
 | `xbx xiso IMAGE` | List or extract the files of an Xbox disc image |
 | `xbx ltcg-probe FILE` | How much of the code uses calling conventions only link-time code generation produces |
@@ -82,22 +83,22 @@ yourself):
 
 ## Starting a project
 
-1. Install: `uv venv && uv pip install git+https://github.com/andrewnakas/decompathon-xbox`
-   (Python 3.11 or newer; Wine on Linux).
-2. Get `default.xbe` off your own disc: `xbx xiso game.iso --extract default.xbe`.
-   Look at it: `xbx xbe default.xbe`, `xbx ltcg-probe default.xbe`. The library
-   versions tell you the SDK, and the SDK tells you the compiler.
-3. Write `xbx.toml` (the schema is the docstring of [`xbx/project.py`](xbx/project.py);
-   jsrf-decomp's is a working example), put the XBE at `orig/default.xbe` and your
-   compiler's `bin/` under `toolchain/msvc/`, and run `xbx cc --setup` once to
-   create the Wine prefix.
-4. `xbx inventory` writes `config/functions.csv`; `xbx gate split` checks it.
-5. Match a handful of small functions by hand to pin the compiler flags, then
-   `xbx gate toolcheck --record`.
-6. Copy the repository furniture from jsrf-decomp: `steward.toml`, the pull
-   request template, the lint and progress-report workflows, `tools/gate.sh`.
+```sh
+uv venv && uv pip install git+https://github.com/andrewnakas/decompathon-xbox    # Python 3.11 or newer; Wine on Linux
+.venv/bin/xbx xiso game.iso out default.xbe       # the executable, off your own disc image
+.venv/bin/xbx xbe out/default.xbe                 # sections, linked libraries and their versions
+.venv/bin/xbx ltcg-probe out/default.xbe          # how much of it a per-object compile can reach
+.venv/bin/xbx init mygame-decomp --xbe out/default.xbe --repo yourname/mygame-decomp --title "My Game"
+```
 
-`xbx init`, which will do steps 3 and 6 for you, is not written yet.
+`xbx init` writes the whole repository: `xbx.toml` with the executable pinned by sha256, its code sections
+and their owners; the function table; the Steward config and the gate wrapper; the pull request template with
+its provenance boxes; the CI workflows; the rules and the guides for people and agents. It prints what is left
+to do, which is mostly one thing: match about ten small functions by hand to pin the compiler and its flags,
+then record the toolchain with `xbx gate toolcheck --record`.
+
+[docs/NEW_PROJECT.md](docs/NEW_PROJECT.md) goes through all of it, from the disc to a repository that merges
+matched functions by itself and shows its progress on [bytematch.dev](https://bytematch.dev).
 
 ## What is not here
 

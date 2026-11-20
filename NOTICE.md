@@ -28,6 +28,12 @@ The five gates follow the design of the
 [THUG decompilation](https://github.com/andrewnakas/thug-decomp)'s gates
 (toolcheck, scan, split, match, build), rewritten for x86, COFF and the XBE.
 
+`xbx/template/` (what `xbx init` writes) is the furniture of
+[jsrf-decomp](https://github.com/andrewnakas/jsrf-decomp), which is CC0, with
+the game taken out. A project made from it is its maintainer's own: the
+template's text may be used under CC0, and the `LICENSE` it writes is CC0
+until the maintainer replaces it.
+
 ## What is not included
 
 No game code or data, no Microsoft compiler, header or library, and nothing

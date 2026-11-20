@@ -1,0 +1,32 @@
+# Project description for the decompathon-xbox tools (xbx). Changing this file
+# is a tooling change: it re-judges every unit.
+
+[project]
+name = "@@NAME@@"
+version = "@@VERSION@@"          # the label of the progress report (the XBE's title id by default)
+
+[image]
+path = "orig/default.xbe"     # your own copy, never committed (XBX_XBE overrides)
+sha256 = "@@SHA256@@"
+# the sections that hold functions, as `xbx init` found them: check the list
+code_sections = [@@CODE_SECTIONS@@]
+
+[compiler]
+profile = "@@PROFILE@@"
+banner = "@@BANNER@@"
+# A first guess. Pin the flags on a handful of hand-matched functions before the first pull request
+# (STATUS.md), then record the toolchain: xbx gate toolcheck --record
+cflags = [@@CFLAGS@@]
+allowed_cflags = []
+includes = ["include", "include/game", "include/sdk"]
+
+[layout]
+functions = "config/functions.csv"
+matched = "src/funcs"
+nonmatching = "src/nonmatching"
+unit_glob = "func_*.cpp"
+symbols = "config/symbols.csv"
+
+[owners]
+headline = ["game"]
+@@OWNER_SECTIONS@@
