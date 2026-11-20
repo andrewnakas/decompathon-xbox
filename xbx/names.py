@@ -87,6 +87,8 @@ def conflicts(known, v, project):
     for name, addr in list(v.links.items()) + ([(v.defines, v.addr)] if v.defines else []):
         if name in shared or name in units.ABSOLUTE:
             continue
+        if addr in project.folded:          # several source functions, each with its own name
+            continue
         seen = known.get(units.slot(name, addr))
         if seen and seen[0] != name:
             out.append(f'{addr:#x} is declared as {name} here and as {seen[0]} in {seen[1]}: '

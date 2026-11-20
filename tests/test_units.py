@@ -123,8 +123,23 @@ def test_each_alias_is_declared_one_way():
     v = match.Verdict(0x12000)
     v.links = {'?func_00011C90_2@Other@@UAEXXZ': 0x11c90}          # a new alias: free
     assert names.conflicts(known, v, _Folded()) == []
-    v.links = {'?func_00011C90_1@Other@@UAEXXZ': 0x11c90}          # alias 1 is Node's already
+    v.links = {'?func_00011C90_1@Other@@UAEXXZ': 0x11c90}          # a folded address takes any names
+    assert names.conflicts(known, v, _Folded()) == []
+    known[(0x12100, 0)] = ('?func_00012100@A@@QAEXXZ', 'src/funcs/func_00012100.cpp')
+    v.links = {'?func_00012100@B@@QAEXXZ': 0x12100}                # any other address: one declaration
     assert len(names.conflicts(known, v, _Folded())) == 1
+
+
+def test_overrides_take_their_address_from_a_sym_line():
+    from xbx import units
+    assert units.is_override('?func_00011C90@Derived@@UAEXXZ', 0x728d0)
+    assert units.is_override('?func_00011C80@Derived@@MAEXH@Z', 0x7e020)        # protected virtual
+    assert not units.is_override('?func_00011C90@Derived@@QAEXXZ', 0x728d0)    # not virtual
+    assert not units.is_override('?func_00011C90@@YAXXZ', 0x728d0)             # a free function
+    assert not units.is_override('?func_00011C90@Derived@@UAEXXZ', 0x11c90)    # its own address
+    assert not units.is_override('?data_00011C90@Derived@@2HA', 0x728d0)
+    assert problems('/* sym: ?func_00011C90@Derived@@UAEXXZ = 0x728D0 */\n') == []
+    assert any('virtual overrides' in p for p in problems('/* sym: ?func_00011C90@@YAXXZ = 0x728D0 */\n'))
 
 
 def test_an_alias_needs_a_listed_folded_function():

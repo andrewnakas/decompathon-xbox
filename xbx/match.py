@@ -38,6 +38,8 @@ SELECT_NODUPLICATES, SELECT_ANY = 1, 2
 # compiler-generated code that legitimately rides along in a unit's object:
 # scalar and vector deleting destructors, virtual-call thunks
 GENERATED_CODE = ('??_G', '??_E', '??_9')
+# a destructor that a generated deleting destructor calls: the implicit one when the class declares none
+IMPLICIT_CODE = '??1'
 EH_CODE = '.text$x'
 BANNED_SECTIONS = ('.CRT$', '.tls', '.bss')
 CACHE_VERSION = '1'
@@ -66,6 +68,7 @@ class Verdict:
     output: str = ''                               # compiler messages
     obj: object = field(default=None, repr=False)  # the parsed object
     placement: dict = field(default_factory=dict, repr=False)   # block key -> retail address
+    via: dict = field(default_factory=dict, repr=False)         # block key -> name of the block that placed it
 
     @property
     def status(self):
@@ -111,6 +114,10 @@ class Matcher:
     def resolve(self, name, unit, v=None):
         """The retail address of an external name, or None when nothing maps it."""
         hit = units.placeholder(name)
+        if hit and name in unit.syms and units.is_override(name, unit.syms[name]):
+            if v is not None:
+                v.used_syms.add(name)
+            return unit.syms[name]
         if hit:
             if units.alias(name) and v is not None and (hit[0] != 'func' or hit[1] not in self.project.folded):
                 v.problems.append(f'{name}: an alias (_N) is only for a folded function, and {hit[1]:#x} is not '
@@ -230,9 +237,11 @@ class Matcher:
             if len(hits) == 1:
                 block = hits[0]
                 v.used_syms.update(s.name for s in block.symbols if s.name in wanted)
-                if self.strict and not any(s.name.startswith('??') for s in block.symbols if s.name in wanted):
+                if self.strict and not any(s.name.startswith('??') or units.is_override(s.name, unit.addr)
+                                           for s in block.symbols if s.name in wanted):
                     v.problems.append(f'{block.name}: only a special member (a ?? name: constructor, destructor, '
-                                      f'operator) may take its address from /* sym: */; name it func_{unit.addr:08X}')
+                                      'operator) or a virtual override may take its address from /* sym: */; '
+                                      f'name it func_{unit.addr:08X}')
         if block is None:
             names = ', '.join(b.name for b in functions) or 'none'
             v.problems.append(f'the object defines no function for this unit: expected one named func_{unit.addr:08X} '
@@ -273,7 +282,9 @@ class Matcher:
                                       'not line up with the function table')
                     return
                 eh = sec.name.startswith(EH_CODE)
-                generated = any(s.name.startswith(GENERATED_CODE) for s in block.symbols)
+                generated = any(s.name.startswith(GENERATED_CODE) for s in block.symbols) or (
+                    block.section.comdat and any(s.name.startswith(IMPLICIT_CODE) for s in block.symbols)
+                    and v.via.get(block.key, '').startswith(GENERATED_CODE[:2]))
                 if eh:
                     wrong = [r for r in rows if r.get('kind') != 'eh']
                     if wrong:
@@ -359,6 +370,7 @@ class Matcher:
                                 f'retail refers to {base:#x} here')
                 return
             placed[b.key] = base
+            v.via[b.key] = block.name
             work.append(b)
             return
         # an undefined external

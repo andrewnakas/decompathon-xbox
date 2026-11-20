@@ -25,6 +25,8 @@ def link(project, obj, unit, placement):
 
     def external(name):
         hit = units.placeholder(name)
+        if hit and name in unit.syms and units.is_override(name, unit.syms[name]):
+            return unit.syms[name]
         if hit:
             return hit[1]
         if name in units.ABSOLUTE:

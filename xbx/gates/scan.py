@@ -136,9 +136,10 @@ def scan_text(project, path, text, raw, tier):
     for flag in unit.cflags:
         if flag not in project.allowed_cflags:
             problems.append(f'compiler flag {flag} is not in the allow-list of xbx.toml')
-    for name in unit.syms:
-        if not name.startswith('??'):
-            problems.append(f'/* sym: {name} */: only special members (names starting ??) take an address this way; '
+    for name, addr in unit.syms.items():
+        if not name.startswith('??') and not units.is_override(name, addr):
+            problems.append(f'/* sym: {name} */: only special members (names starting ??) and virtual overrides '
+                            '(a virtual member named after the function it overrides) take an address this way; '
                             'call everything else func_XXXXXXXX or data_XXXXXXXX')
     for name in unit.duplicate_syms:
         problems.append(f'/* sym: {name} */ is given two different addresses')
