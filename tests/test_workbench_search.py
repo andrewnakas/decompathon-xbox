@@ -210,3 +210,18 @@ def test_show_keeps_paths_outside_the_current_directory_absolute(tmp_path, monke
     (tmp_path / 'sub').mkdir()
     assert cli.show(str(tmp_path / 'sub' / 'a.cpp')) == os.path.join('sub', 'a.cpp')
     assert cli.show('/somewhere/else/a.cpp') == '/somewhere/else/a.cpp'
+
+
+def test_function_span_through_sym_lines():
+    """Units whose function is a constructor, destructor or override have no func_ name: the
+    workbench finds them through the /* sym: */ line that gives them the unit's address."""
+    from xbx.workbench import permute_lib as pl
+    dtor = ('/* sym: ??1Thing@@UAE@XZ = 0x000728C0 */\n'
+            'struct Thing { virtual ~Thing(); };\nThing::~Thing()\n{\n    x = 1;\n}\n')
+    ctor = ('/* sym: ??0Thing@@QAE@XZ = 0x00012100 */\n'
+            'struct Thing { Thing(); };\nThing::Thing()\n{\n    y = 2;\n}\n')
+    ovr = ('/* sym: ?func_00011C90@Thing@@UAEXXZ = 0x000728D0 */\n'
+           'struct Thing { virtual void func_00011C90(); };\nvoid Thing::func_00011C90()\n{\n    z = 3;\n}\n')
+    for text, addr, body in ((dtor, 0x728c0, 'x = 1;'), (ctor, 0x12100, 'y = 2;'), (ovr, 0x728d0, 'z = 3;')):
+        s, e = pl.function_body(text, addr)
+        assert text[s:e].strip() == body

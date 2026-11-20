@@ -104,13 +104,42 @@ def _definition_brace(text, k):
     return k if k is not None and k < len(text) and text[k] == '{' else None
 
 
+def _sym_names(text, addr):
+    """Regexes for the C++ names that the unit's /* sym: */ lines give address addr: Class::Class,
+    Class::~Class, or Class::name for an override that carries another function's address."""
+    out = []
+    for m in re.finditer(r'/\*\s*sym:\s*(\S+)\s*=\s*(0[xX][0-9A-Fa-f]+)\s*\*/', text):
+        name, value = m.group(1), int(m.group(2), 16)
+        if value != addr:
+            continue
+        special = re.match(r'\?\?([01])([A-Za-z_]\w*)@', name)
+        member = re.match(r'\?([A-Za-z_]\w*)@([A-Za-z_]\w*)@', name)
+        if special:
+            cls = re.escape(special.group(2))
+            tail = cls if special.group(1) == '0' else r'~\s*' + cls
+            out.append(re.compile(r'(?<![0-9A-Za-z_])%s\s*::\s*%s(?![0-9A-Za-z_])' % (cls, tail)))
+        elif member:
+            out.append(re.compile(r'(?<![0-9A-Za-z_])%s\s*::\s*%s(?![0-9A-Za-z_])'
+                                  % (re.escape(member.group(2)), re.escape(member.group(1)))))
+    return out
+
+
 def function_span(text, addr):
-    """Where a unit's text defines the function named func_XXXXXXXX (addr in
-    hex, eight digits, either case; any scope or qualification before it):
-    {'head': start of the definition's first token, 'name': index of the name,
-    'open': its '{', 'close': the matching '}'}. ValueError when the text has
-    no such definition."""
-    name = re.compile(r'(?<![0-9A-Za-z_])func_%08x(?![0-9A-Za-z_])' % addr, re.I)
+    """Where a unit's text defines its function: the one named func_XXXXXXXX (addr in hex, eight
+    digits, either case; any scope or qualification before it), else the constructor, destructor or
+    override that a /* sym: */ line gives address addr. {'head': start of the definition's first
+    token, 'name': index of the name, 'open': its '{', 'close': the matching '}'}. ValueError when
+    the text has no such definition."""
+    names = [re.compile(r'(?<![0-9A-Za-z_])func_%08x(?![0-9A-Za-z_])' % addr, re.I)]
+    for name in names + _sym_names(text, addr):
+        span = _definition_of(text, name)
+        if span is not None:
+            return span
+    raise ValueError(f'the text defines no function named func_{addr:08X}, and no /* sym: */ line gives '
+                     'a constructor, destructor or override that address')
+
+
+def _definition_of(text, name):
     i, boundary = 0, 0
     while i < len(text):
         j = _skip_literal(text, i)
@@ -139,7 +168,7 @@ def function_span(text, addr):
                 i = m.end()
                 continue
         i += 1
-    raise ValueError(f'the text defines no function named func_{addr:08X}')
+    return None
 
 
 def function_body(text, addr):
