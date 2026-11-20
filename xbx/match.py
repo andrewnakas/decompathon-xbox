@@ -38,8 +38,9 @@ SELECT_NODUPLICATES, SELECT_ANY = 1, 2
 # compiler-generated code that legitimately rides along in a unit's object:
 # scalar and vector deleting destructors, virtual-call thunks
 GENERATED_CODE = ('??_G', '??_E', '??_9')
-# a destructor that a generated deleting destructor calls: the implicit one when the class declares none
-IMPLICIT_CODE = '??1'
+# special members the compiler emits as COMDATs (implicit, or inline and not inlined everywhere): a base's
+# implicit destructor called from unwind code, an inline base constructor. Placed and compared like the rest
+IMPLICIT_CODE = ('??0', '??1', '??4')
 EH_CODE = '.text$x'
 BANNED_SECTIONS = ('.CRT$', '.tls', '.bss')
 CACHE_VERSION = '1'
@@ -348,11 +349,11 @@ class Matcher:
     @staticmethod
     def _generated(block, v):
         """Code the compiler makes for a class: a deleting destructor, a vcall thunk, an adjustor thunk
-        (a second base's slot), or the implicit destructor a deleting destructor in the object calls."""
+        (a second base's slot), or a special member it emitted as a COMDAT (an implicit destructor, an
+        inline constructor it did not inline everywhere)."""
         return any(s.name.startswith(GENERATED_CODE) for s in block.symbols) or (
-            block.section.comdat and any(units.is_adjustor(s.name) for s in block.symbols)) or (
-            block.section.comdat and any(s.name.startswith(IMPLICIT_CODE) for s in block.symbols)
-            and v.via.get(block.key, '').startswith(GENERATED_CODE[:2]))
+            block.section.comdat and any(units.is_adjustor(s.name) or s.name.startswith(IMPLICIT_CODE)
+                                         for s in block.symbols))
 
     def _deleter_elsewhere(self, block, addr):
         """Whether our deleting destructor does not fit retail at addr while retail's function there is a

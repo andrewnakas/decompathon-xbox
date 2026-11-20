@@ -326,3 +326,24 @@ def test_a_deleting_destructor_retail_took_from_another_object():
     assert 0x11100 not in [base for base, _ in written]
     project.rows[0x11100]['calls'] = ''                       # retail's function there is something else
     assert not verdict(project, obj, unit_for()).ok
+
+
+def test_an_inline_special_member_called_out_of_line():
+    """Unwind code calls a base's implicit destructor out of line: its COMDAT copy is placed where the call
+    goes and compared there. A copy that differs from retail fails; a plain helper is still refused."""
+    def case(name, retail_body):
+        code = bytes.fromhex('e8 00000000 c3')                       # call ??1Base; ret
+        body = bytes.fromhex('c3')
+        project = new_project({FUNC: len(code), 0x11100: 1})
+        project.image.write(FUNC, code[:1] + struct.pack('<i', 0x11100 - (FUNC + 5)) + code[5:])
+        project.image.write(0x11100, retail_body)
+        obj = coff.Coff(cofftool.build(
+            [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1, relocs=[(1, name, coff.REL_REL32)]),
+             dict(name='.text', data=body, flags=cofftool.TEXT, comdat=2)],
+            [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION),
+             dict(name=name, section=2, type=cofftool.FUNCTION)]))
+        return verdict(project, obj, unit_for())
+    v = case('??1Base@@QAE@XZ', b'\xc3')
+    assert v.ok and v.covers == [0x11100], v.problems
+    assert not case('??1Base@@QAE@XZ', b'\xcc').ok
+    assert any('second function' in p for p in case('?helper@@YAXXZ', b'\xc3').problems)
