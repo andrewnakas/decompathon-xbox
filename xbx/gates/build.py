@@ -19,8 +19,10 @@ class LinkError(Exception):
     pass
 
 
-def link(project, obj, unit, placement):
-    """[(address, bytes)] for every placed block of an object, relocations applied."""
+def link(project, obj, unit, placement, discarded=()):
+    """[(address, bytes)] for every placed block of an object, relocations applied. Discarded blocks
+    (compiler-made COMDATs whose retail copy came from another object) keep their address for the
+    references to them but are not written."""
     shared = project.shared_symbols
 
     def external(name):
@@ -50,6 +52,8 @@ def link(project, obj, unit, placement):
 
     out = []
     for block in obj.blocks():
+        if block.key in discarded:
+            continue
         if block.key not in placement:
             if block.size and not block.section.comdat:     # an unreferenced COMDAT is dropped by the linker
                 raise LinkError(f'{block.name} was never given an address')
@@ -96,7 +100,7 @@ def run(project):
             report.problem(unit.path, 'is not a proven match (see the match gate)')
             continue
         try:
-            pieces = link(project, v.obj, unit, v.placement)
+            pieces = link(project, v.obj, unit, v.placement, v.discarded)
         except LinkError as e:
             report.problem(unit.path, f'does not link: {e}')
             continue

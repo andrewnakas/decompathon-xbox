@@ -69,6 +69,7 @@ class Verdict:
     obj: object = field(default=None, repr=False)  # the parsed object
     placement: dict = field(default_factory=dict, repr=False)   # block key -> retail address
     via: dict = field(default_factory=dict, repr=False)         # block key -> name of the block that placed it
+    discarded: set = field(default_factory=set, repr=False)     # compiler-made COMDATs retail took from elsewhere
 
     @property
     def status(self):
@@ -279,6 +280,14 @@ class Matcher:
         if sec.is_code != (home.name in self.project.code_sections):
             v.problems.append(f'{name}: our {kind} would sit at {addr:#x}, which is in {home.name}')
             return
+        if not is_primary and sec.is_code and sec.comdat and self._deleter_elsewhere(block, addr):
+            # code the compiler makes for a class (a deleting destructor, an implicit destructor) is emitted
+            # in every object that needs it and the linker keeps one copy. Retail kept another object's (one
+            # where the destructor was inlined, say): ours is not the unit's code and goes nowhere
+            v.notes.append(f'{name}: retail kept another object\'s copy of this compiler-made function at '
+                           f'{addr:#x}; ours is left out')
+            v.discarded.add(block.key)
+            return
         if not is_primary:
             if sec.is_code:
                 rows = self.tile(addr, block.data)
@@ -287,9 +296,7 @@ class Matcher:
                                       'not line up with the function table')
                     return
                 eh = sec.name.startswith(EH_CODE)
-                generated = any(s.name.startswith(GENERATED_CODE) for s in block.symbols) or (
-                    block.section.comdat and any(s.name.startswith(IMPLICIT_CODE) for s in block.symbols)
-                    and v.via.get(block.key, '').startswith(GENERATED_CODE[:2]))
+                generated = self._generated(block, v)
                 if eh:
                     wrong = [r for r in rows if r.get('kind') != 'eh']
                     if wrong:
@@ -337,6 +344,35 @@ class Matcher:
             else:
                 v.problems.append(f'{name} at {addr:#x} differs from retail: {len(diffs)} of {block.size} bytes, '
                                   f'first at +{diffs[0]:#x}')
+
+    @staticmethod
+    def _generated(block, v):
+        """Code the compiler makes for a class: a deleting destructor, a vcall thunk, or the implicit
+        destructor a deleting destructor in the object calls."""
+        return any(s.name.startswith(GENERATED_CODE) for s in block.symbols) or (
+            block.section.comdat and any(s.name.startswith(IMPLICIT_CODE) for s in block.symbols)
+            and v.via.get(block.key, '').startswith(GENERATED_CODE[:2]))
+
+    def _deleter_elsewhere(self, block, addr):
+        """Whether our deleting destructor does not fit retail at addr while retail's function there is a
+        deleting destructor too (it calls operator delete): the linker kept another object's copy, for
+        example one where the destructor was inlined into it."""
+        if not any(s.name.startswith(('??_G', '??_E')) for s in block.symbols) or self._fits(block, addr):
+            return False
+        row = self.project.rows.get(addr)
+        if row is None or row.get('kind', 'func') != 'func':
+            return False
+        deletes = {a for n, a in self.project.shared_symbols.items() if n in ('??3@YAXPAX@Z', '??_V@YAXPAX@Z')}
+        return bool(deletes & {int(c, 16) for c in row.get('calls', '').split()})
+
+    def _fits(self, block, addr):
+        """Whether a code block lines up with the table at addr and equals retail there apart from its
+        relocation fields."""
+        if self.tile(addr, block.data) is None:
+            return False
+        fields = {o for r in block.relocations for o in range(r.offset - block.start, r.offset - block.start + 4)}
+        retail = self.image.read(addr, block.size)
+        return all(k in fields or a == b for k, (a, b) in enumerate(zip(block.data, retail)))
 
     def _reference(self, obj, unit, v, block, k, sym, addend, target, placed, work, is_primary):
         where = f'{block.name}+{k:#x}'

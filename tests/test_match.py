@@ -297,3 +297,32 @@ def test_folded_eh_stub_with_several_parents():
     assert v.covers == [0x11800]
     v = eh_case('00010f00 00012000')                       # a stub of other functions only
     assert not v.ok and any('belongs to' in p for p in v.problems)
+
+
+def test_a_deleting_destructor_retail_took_from_another_object():
+    """Our deleting destructor calls the destructor; retail's copy (from the destructor's own object) has it
+    inlined. Retail's function there calls operator delete, so ours is left out, uncredited and unwritten."""
+    code = bytes.fromhex('c7 01 00000000 c3')
+    ours = bytes.fromhex('c2 0400')
+    project = new_project({FUNC: len(code), 0x11100: 8, 0x11800: 1})
+    project.shared_symbols['??3@YAXPAX@Z'] = 0x11800
+    project.rows[0x11100]['calls'] = '00011800'
+    project.image.write(0x11100, bytes.fromhex('e8 fb060000 c2 0400'))   # call operator delete; ret 4
+    obj = coff.Coff(cofftool.build(
+        [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1, relocs=[(2, '??_7Thing@@6B@', coff.REL_DIR32)]),
+         dict(name='.text', data=ours, flags=cofftool.TEXT, comdat=2),
+         dict(name='.rdata', data=bytes(4), flags=cofftool.RDATA, comdat=2,
+              relocs=[(0, '??_GThing@@UAEPAXI@Z', coff.REL_DIR32)])],
+        [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION),
+         dict(name='??_GThing@@UAEPAXI@Z', section=2, type=cofftool.FUNCTION),
+         dict(name='??_7Thing@@6B@', section=3)]))
+    project.image.write(FUNC, code[:2] + struct.pack('<I', 0x20020) + code[6:])
+    project.image.write(0x20020, struct.pack('<I', 0x11100))
+    v = verdict(project, obj, unit_for())
+    assert v.ok, v.problems
+    assert v.covers == [] and len(v.discarded) == 1
+    blocks = {b.name: b for b in obj.blocks()}
+    written = build_gate.link(project, obj, unit_for(), v.placement, v.discarded)
+    assert 0x11100 not in [base for base, _ in written]
+    project.rows[0x11100]['calls'] = ''                       # retail's function there is something else
+    assert not verdict(project, obj, unit_for()).ok
