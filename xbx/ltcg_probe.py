@@ -46,6 +46,9 @@ def entry_register_args(md, code, va):
             break
         read, write = ({PARTS.get(name, name) for name in map(md.reg_name, regs)} for regs in ins.regs_access())
         ops = ins.operands
+        if ins.mnemonic == 'mov' and len(ops) == 2 and ops[0].type == ops[1].type == x86.X86_OP_REG \
+                and ops[0].reg == ops[1].reg:
+            continue                    # mov edi, edi: a two-byte no-op (padding), neither a read nor a write
         if ins.mnemonic == 'push' or overwrites(ins.mnemonic, ops):
             read = set()
         used = (read & WATCH) - written

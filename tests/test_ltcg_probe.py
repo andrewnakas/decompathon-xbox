@@ -25,3 +25,8 @@ def test_results_that_do_not_depend_on_the_register_are_writes():
 
 def test_a_mixed_sbb_still_reads():
     assert reads('1bc1c3') == {'eax'}               # sbb eax, ecx
+
+
+def test_a_register_moved_onto_itself_is_a_no_op():
+    assert reads('8bffc3') == set()                 # mov edi, edi; ret
+    assert reads('8bff8b4704c3') == {'edi'}         # mov edi, edi; mov eax, [edi+4]: the second is a read
