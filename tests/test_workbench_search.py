@@ -238,3 +238,14 @@ def test_function_span_for_operators():
     assert member[s:e].strip().startswith('a = o.a;')
     s, e = pl.function_body(free, 0x15fa30)
     assert 'memcmp' in free[s:e]
+
+
+def test_function_span_for_a_constructor_with_initializers():
+    from xbx.workbench import permute_lib as pl
+    text = ('/* sym: ??0Thing@@QAE@PAUNode@@H@Z = 0x000C3860 */\n'
+            'struct Node { Node(Node *, int); };\nstruct Thing : Node { Thing(Node *, int); int a; };\n'
+            'Thing::Thing(Node *owner, int id)\n    : Node(owner, id), a(0)\n{\n    a = 2;\n}\n')
+    s, e = pl.function_body(text, 0xc3860)
+    assert text[s:e].strip() == 'a = 2;'
+    # a ternary's colon after a call is not an initializer list
+    assert pl._definition_brace('f(x) : y;', 1) is None

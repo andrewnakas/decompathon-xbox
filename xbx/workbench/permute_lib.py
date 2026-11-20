@@ -90,7 +90,8 @@ _AFTER_PARAMETERS = re.compile(r'(?:const|volatile)\b|throw\s*\(')
 def _definition_brace(text, k):
     """k: just after a function's name. The index of the '{' that opens its
     body when a definition follows (parameters, then const / volatile /
-    throw(...)), else None (a declaration, a call)."""
+    throw(...), then a constructor's initializer list), else None (a
+    declaration, a call)."""
     k = _skip_space(text, k)
     if k >= len(text) or text[k] != '(':
         return None
@@ -101,7 +102,29 @@ def _definition_brace(text, k):
         if not m:
             break
         k = _split_top(text, m.end() - 1) if m.group(0).endswith('(') else m.end()
+    if k is not None and text.startswith(':', k) and not text.startswith('::', k):
+        k = _initializers_end(text, k + 1)      # a constructor's ": Base(a), member(b)"
     return k if k is not None and k < len(text) and text[k] == '{' else None
+
+
+_INITIALIZER_NAME = re.compile(r'[A-Za-z_][\w:]*\s*')
+
+
+def _initializers_end(text, k):
+    """k: just after a constructor's ':'. The index after its initializer list
+    (name(args), separated by commas), or None when it is not one."""
+    while True:
+        k = _skip_space(text, k)
+        m = _INITIALIZER_NAME.match(text, k)
+        if not m or m.end() >= len(text) or text[m.end()] != '(':
+            return None
+        k = _split_top(text, m.end())
+        if k is None:
+            return None
+        k = _skip_space(text, k)
+        if not text.startswith(',', k):
+            return k
+        k += 1
 
 
 # MSVC's codes for operators in a decorated name (??4X@@... is X::operator=)
