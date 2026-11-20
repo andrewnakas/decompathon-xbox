@@ -13,6 +13,13 @@ Wine sometimes wedges cl.exe at 0% CPU under load, so every run has a timeout
 and is retried; each run is its own process group, so a timeout kills the
 whole tree. Each compile runs in a private temporary directory, so parallel
 compiles never share scratch files.
+
+Most of those wedges are cold starts. When no process of a Wine prefix is
+running, the next one starts the server, which loads the registry, and
+wineboot, which starts the services: seconds on a quiet machine, minutes on a
+loaded one, and once per compile when compiles come one at a time. So one idle
+process is kept in the prefix (Compiler.keep_warm). It ends by itself
+XBX_WINE_KEEP_WARM seconds (default 900) after it was started; 0 turns it off.
 """
 import hashlib
 import os
@@ -22,9 +29,13 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 
 TIMEOUT = int(os.environ.get('XBX_TOOL_TIMEOUT', '120'))
 ATTEMPTS = int(os.environ.get('XBX_TOOL_ATTEMPTS', '3'))
+KEEP_WARM = int(os.environ.get('XBX_WINE_KEEP_WARM', '900'))
+WARM_STAMP = '.xbx-warm'     # in the prefix: "<when the idle process ends> <its process id>"
 WINDOWS = sys.platform in ('win32', 'cygwin', 'msys')
 PATH_SWITCHES = ('/Fo', '/Fe', '/Fd', '/Fa', '/FI', '/I', '/OUT:', '/MAP:')
 BANNER = re.compile(r'Version\s+(\d+\.\d+\.\d+(?:\.\d+)?)')
@@ -57,11 +68,64 @@ def tool_arg(arg):
     return arg
 
 
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True      # it exists and is someone else's
+    return True
+
+
 class Compiler:
+    _warm_lock = threading.Lock()
+
     def __init__(self, msvc, wineprefix=None, timeout=TIMEOUT, attempts=ATTEMPTS):
         self.msvc = os.path.abspath(msvc)
         self.wineprefix = os.path.abspath(wineprefix) if wineprefix else None
         self.timeout, self.attempts = timeout, attempts
+
+    def keep_warm(self, now=None):
+        """Makes sure an idle process is running in the Wine prefix, so that the
+        next compile does not start Wine cold. Returns True when it started one.
+
+        The stamp file says when the current one ends. A new one is started
+        when none is alive or less than half its time is left, so the prefix
+        stays warm for as long as compiles keep coming and goes quiet
+        KEEP_WARM seconds after the last one. After starting the first, one
+        small command is run to the end, so that the cold start is paid once,
+        by one process, before several compiles begin together."""
+        if WINDOWS or KEEP_WARM <= 0 or not self.wineprefix or not os.path.isdir(self.wineprefix):
+            return False
+        stamp = os.path.join(self.wineprefix, WARM_STAMP)
+        with Compiler._warm_lock:
+            now = time.time() if now is None else now
+            try:
+                with open(stamp, encoding='utf-8') as f:
+                    until, pid = f.read().split()[:2]
+                until, running = float(until), alive(int(pid))
+            except (OSError, ValueError):
+                until, running = 0.0, False
+            if running and until - now > KEEP_WARM / 2:
+                return False
+            env = dict(os.environ, WINEPREFIX=self.wineprefix, WINEDEBUG='-all')
+            env.setdefault('WINEDLLOVERRIDES', 'mscoree=d;mshtml=d;winemenubuilder.exe=d')
+            quiet = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                # cmd.exe waits for input that never comes, until sleep ends and closes the pipe
+                keeper = subprocess.Popen(['sh', '-c', f'sleep {KEEP_WARM} | wine cmd.exe'], cwd='/', env=env,
+                                          start_new_session=True, **quiet)
+                with open(stamp, 'w', encoding='utf-8') as f:
+                    f.write(f'{now + KEEP_WARM:.0f} {keeper.pid}\n')
+            except OSError:
+                return False
+            if not running:
+                try:
+                    subprocess.run(['wine', 'cmd.exe', '/c', 'exit'], cwd='/', env=env, timeout=self.timeout, **quiet)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            return True
 
     def tool(self, name):
         path = os.path.join(self.msvc, 'bin', name)
@@ -116,6 +180,7 @@ class Compiler:
         """Runs bin/<name> with args and returns (exit status, output)."""
         exe = self.tool(name)
         command = ([exe] if WINDOWS else ['wine', exe]) + [tool_arg(a) for a in args]
+        self.keep_warm()
         tmp = tempfile.mkdtemp(prefix='xbxcc')
         try:
             for attempt in range(1, self.attempts + 1):
