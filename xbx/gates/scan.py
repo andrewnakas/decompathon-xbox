@@ -42,7 +42,7 @@ DECLSPEC_OK = {'noreturn', 'novtable', 'align'}
 INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*(.*)$', re.M)
 INCLUDE_FORM = re.compile(r'(?:"([^"]+)"|<([^>]+)>)[ \t]*$')
 BARE = re.compile(r'(?:^|[;{}])[ \t\n]*((?:\*+|&)?[A-Za-z_]\w*(?:(?:\.|->|::)\w+|\[[^\[\]();]*\])*)[ \t\n]*;')
-BARE_OK = {'break', 'continue', 'return', 'default', 'public', 'private', 'protected', 'else', 'do'}
+BARE_OK = {'break', 'continue', 'return', 'default', 'public', 'private', 'protected', 'else', 'do', 'throw'}
 SELF_ASSIGN = re.compile(r'(?:^|[;{})])\s*([A-Za-z_][\w.\->\[\]]*)\s*=\s*([A-Za-z_][\w.\->\[\]]*)\s*;')
 
 

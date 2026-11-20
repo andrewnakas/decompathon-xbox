@@ -97,6 +97,7 @@ def test_scan_refusals():
     # a member or variable of a type defined in place is a declaration
     assert problems('struct A { union { float value; int bits; } depth; struct { int x; } pos[2]; };') == []
     assert problems('enum { ONE, TWO } mode;') == []
+    assert problems('void f() { try { g(); } catch (...) { throw; } }') == []
     # a block followed by a bare expression is still refused
     assert any('bare expression' in p for p in problems('void f(int x) { if (x) { x++; } m_count; }'))
     assert any('fuzzy' in p for p in problems('int x;', tier='nonmatching'))

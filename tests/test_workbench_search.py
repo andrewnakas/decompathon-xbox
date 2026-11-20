@@ -225,3 +225,16 @@ def test_function_span_through_sym_lines():
     for text, addr, body in ((dtor, 0x728c0, 'x = 1;'), (ctor, 0x12100, 'y = 2;'), (ovr, 0x728d0, 'z = 3;')):
         s, e = pl.function_body(text, addr)
         assert text[s:e].strip() == body
+
+
+def test_function_span_for_operators():
+    from xbx.workbench import permute_lib as pl
+    member = ('/* sym: ??4Thing@@QAEAAU0@ABU0@@Z = 0x0016AAD0 */\n'
+              'struct Thing { Thing &operator=(const Thing &); int a; };\n'
+              'Thing &Thing::operator=(const Thing &o)\n{\n    a = o.a;\n    return *this;\n}\n')
+    free = ('/* sym: ??8@YA_NABU_GUID@@0@Z = 0x0015FA30 */\n'
+            'bool operator==(const _GUID &a, const _GUID &b)\n{\n    return memcmp(&a, &b, 16) == 0;\n}\n')
+    s, e = pl.function_body(member, 0x16aad0)
+    assert member[s:e].strip().startswith('a = o.a;')
+    s, e = pl.function_body(free, 0x15fa30)
+    assert 'memcmp' in free[s:e]

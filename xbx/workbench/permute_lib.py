@@ -104,6 +104,12 @@ def _definition_brace(text, k):
     return k if k is not None and k < len(text) and text[k] == '{' else None
 
 
+# MSVC's codes for operators in a decorated name (??4X@@... is X::operator=)
+DECORATED_OPERATORS = {'2': 'new', '3': 'delete', '4': '=', '7': '!', '8': '==', '9': '!=', 'A': '[]', 'C': '->',
+             'D': '*', 'E': '++', 'F': '--', 'G': '-', 'H': '+', 'M': '<', 'N': '<=', 'O': '>', 'P': '>=',
+             'R': '()', 'Y': '+=', 'Z': '-=', '_0': '/=', '_4': '&=', '_5': '|=', '_6': '^='}
+
+
 def _sym_names(text, addr):
     """Regexes for the C++ names that the unit's /* sym: */ lines give address addr: Class::Class,
     Class::~Class, or Class::name for an override that carries another function's address."""
@@ -114,7 +120,14 @@ def _sym_names(text, addr):
             continue
         special = re.match(r'\?\?([01])([A-Za-z_]\w*)@', name)
         member = re.match(r'\?([A-Za-z_]\w*)@([A-Za-z_]\w*)@', name)
-        if special:
+        op = re.match(r'\?\?([2-9A-Z]|_[0-9A-Z])([A-Za-z_]\w*)?@', name)
+        if op and op.group(1) in DECORATED_OPERATORS:
+            symbol = r'operator\s*' + re.escape(DECORATED_OPERATORS[op.group(1)])
+            if op.group(2) and not name.startswith('??' + op.group(1) + '@'):
+                out.append(re.compile(r'(?<![0-9A-Za-z_])%s\s*::\s*%s' % (re.escape(op.group(2)), symbol)))
+            else:
+                out.append(re.compile(r'(?<![0-9A-Za-z_:])%s' % symbol))
+        elif special:
             cls = re.escape(special.group(2))
             tail = cls if special.group(1) == '0' else r'~\s*' + cls
             out.append(re.compile(r'(?<![0-9A-Za-z_])%s\s*::\s*%s(?![0-9A-Za-z_])' % (cls, tail)))
