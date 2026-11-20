@@ -347,9 +347,10 @@ class Matcher:
 
     @staticmethod
     def _generated(block, v):
-        """Code the compiler makes for a class: a deleting destructor, a vcall thunk, or the implicit
-        destructor a deleting destructor in the object calls."""
+        """Code the compiler makes for a class: a deleting destructor, a vcall thunk, an adjustor thunk
+        (a second base's slot), or the implicit destructor a deleting destructor in the object calls."""
         return any(s.name.startswith(GENERATED_CODE) for s in block.symbols) or (
+            block.section.comdat and any(units.is_adjustor(s.name) for s in block.symbols)) or (
             block.section.comdat and any(s.name.startswith(IMPLICIT_CODE) for s in block.symbols)
             and v.via.get(block.key, '').startswith(GENERATED_CODE[:2]))
 

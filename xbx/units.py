@@ -89,6 +89,16 @@ def is_override(name, addr):
     return at > 0 and name.count('@', 0, at) >= 1 and name[at + 2:at + 3] in VIRTUAL_CODES
 
 
+# access codes of an adjustor thunk: the compiler-made stub that moves `this` from a second base to the
+# derived object and jumps to the override (?AddRef@X@@W3AGKXZ)
+ADJUSTOR_CODES = frozenset('GHOPWX')
+
+
+def is_adjustor(name):
+    at = name.find('@@')
+    return name.startswith('?') and not name.startswith('??') and at > 0 and name[at + 2:at + 3] in ADJUSTOR_CODES
+
+
 def unit_address(path):
     m = UNIT_ADDRESS.search(os.path.basename(path))
     return int(m.group(1), 16) if m else None

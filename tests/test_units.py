@@ -152,3 +152,11 @@ def test_an_alias_needs_a_listed_folded_function():
     assert m.resolve('?func_00012100_1@A@@UAEXXZ', unit, v) == 0x12100
     assert v.problems and 'folded' in v.problems[0]
     assert m.resolve('?data_00011C90_1@@3HA', unit, match.Verdict(0x12000)) == 0x11c90
+
+
+def test_adjustor_thunks_are_compiler_made():
+    from xbx import units
+    assert units.is_adjustor('?AddRef@MemStream@@W3AGKXZ')
+    assert units.is_adjustor('?Release@Object_001E3A5C@@W3AGKXZ')
+    assert not units.is_adjustor('?AddRef@MemStream@@UAGKXZ')
+    assert not units.is_adjustor('??_GMemStream@@UAEPAXI@Z')
