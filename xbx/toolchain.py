@@ -9,17 +9,23 @@ The compiler directory holds bin/ (cl.exe, c1.dll, c1xx.dll, c2.dll and the
 runtime DLLs they load), include/ and lib/, taken from your own licensed
 Visual Studio. Nothing here downloads a compiler.
 
-Wine sometimes wedges cl.exe at 0% CPU under load, so every run has a timeout
-and is retried; each run is its own process group, so a timeout kills the
-whole tree. Each compile runs in a private temporary directory, so parallel
-compiles never share scratch files.
+Each compile runs in a private temporary directory, so parallel compiles never
+share scratch files, and as its own process group, so a timeout kills the
+whole tree. Every run has a timeout and is retried.
 
-Most of those wedges are cold starts. When no process of a Wine prefix is
-running, the next one starts the server, which loads the registry, and
-wineboot, which starts the services: seconds on a quiet machine, minutes on a
-loaded one, and once per compile when compiles come one at a time. So one idle
-process is kept in the prefix (Compiler.keep_warm). It ends by itself
-XBX_WINE_KEEP_WARM seconds (default 900) after it was started; 0 turns it off.
+Two things about Wine shape the rest:
+
+- When no process of a Wine prefix is running, the next one starts the server,
+  which loads the registry, and wineboot, which starts the services: seconds on
+  a quiet machine, minutes on a loaded one, and once per compile when compiles
+  come one at a time. So one idle process is kept in the prefix
+  (Compiler.keep_warm). It ends by itself XBX_WINE_KEEP_WARM seconds (default
+  900) after it was started; 0 turns it off.
+- Those services inherit the standard output of whichever process started
+  them and keep it open for as long as they live. A compile read through a pipe
+  would therefore not end until the services did, long after cl.exe had
+  finished. So a run writes its output to a file in its temporary directory,
+  and only the compiler process itself is waited for.
 """
 import hashlib
 import os
@@ -158,12 +164,15 @@ class Compiler:
                            stderr=subprocess.DEVNULL, timeout=600, check=False)
             subprocess.run(['wineserver', '-w'], env=self.env(tmp), timeout=600, check=False)
 
-    def _once(self, command, cwd, env):
+    def _once(self, command, cwd, env, log):
+        """One run: (exit status, output). The output goes to the file `log`;
+        only the process itself is waited for (see the module's notes)."""
         posix = os.name == 'posix'
-        p = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             stdin=subprocess.DEVNULL, start_new_session=posix)
+        with open(log, 'wb') as out:
+            p = subprocess.Popen(command, cwd=cwd, env=env, stdout=out, stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL, start_new_session=posix)
         try:
-            out, _ = p.communicate(timeout=self.timeout)
+            p.wait(timeout=self.timeout)
         except subprocess.TimeoutExpired:
             if posix:
                 try:
@@ -172,9 +181,10 @@ class Compiler:
                     pass
             else:
                 p.kill()
-            p.communicate()
+            p.wait()
             raise
-        return p.returncode, out.decode('utf-8', errors='replace').replace('\r\n', '\n')
+        with open(log, 'rb') as f:
+            return p.returncode, f.read().decode('utf-8', errors='replace').replace('\r\n', '\n')
 
     def run(self, name, args, cwd=None, check=True):
         """Runs bin/<name> with args and returns (exit status, output)."""
@@ -185,7 +195,7 @@ class Compiler:
         try:
             for attempt in range(1, self.attempts + 1):
                 try:
-                    code, out = self._once(command, cwd or tmp, self.env(tmp))
+                    code, out = self._once(command, cwd or tmp, self.env(tmp), os.path.join(tmp, 'output.txt'))
                     break
                 except FileNotFoundError as e:
                     raise ToolError(f'cannot run {command[0]}: {e.strerror}') from e

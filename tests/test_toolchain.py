@@ -62,3 +62,22 @@ def test_it_can_be_turned_off_and_needs_a_prefix(tmp_path, monkeypatch):
     c, r, stamp = compiler(tmp_path, monkeypatch)
     c.wineprefix = str(tmp_path / 'no-such-prefix')
     assert c.keep_warm(now=1000.0) is False and not r.started
+
+
+def test_a_run_ends_when_its_process_does_whoever_still_holds_its_output(tmp_path):
+    """What Wine's services do: something the tool starts leaves a process behind
+    that keeps the standard output open. The run must not wait for it."""
+    import time
+    c = toolchain.Compiler(str(tmp_path / 'msvc'), None, timeout=20)
+    start = time.time()
+    code, out = c._once(['sh', '-c', 'echo first; (sleep 8 &); echo second; exit 3'], str(tmp_path), dict(os.environ),
+                        str(tmp_path / 'output.txt'))
+    assert (code, out) == (3, 'first\nsecond\n')
+    assert time.time() - start < 5
+
+
+def test_a_run_that_does_not_end_is_killed_with_its_children(tmp_path):
+    import pytest
+    c = toolchain.Compiler(str(tmp_path / 'msvc'), None, timeout=1)
+    with pytest.raises(subprocess.TimeoutExpired):
+        c._once(['sh', '-c', 'sleep 30'], str(tmp_path), dict(os.environ), str(tmp_path / 'output.txt'))
