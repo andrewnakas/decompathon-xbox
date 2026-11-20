@@ -44,6 +44,10 @@ def main(argv=None):
                     help='split: check the committed table without building it again (quick, not the judge\'s check)')
     args = ap.parse_args(argv)
     try:
+        sys.stdout.reconfigure(line_buffering=True)   # a log shows each line when it is printed
+    except (AttributeError, ValueError):
+        pass
+    try:
         project = project_module.current()
         status = 0
         for name in (GATES if args.gate == 'all' else (args.gate,)):

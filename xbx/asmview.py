@@ -1,7 +1,10 @@
 """Prints a function's retail disassembly, with what each address refers to.
 
     xbx asm <address> [...]          one or more functions
-    xbx asm --small N [--owner game] the N smallest functions with no unit yet
+    xbx asm --small N                the N smallest functions with no unit yet
+    xbx asm --list N                 the same choice, one line each
+        --from ADDR --to ADDR        only that address range (a lane's)
+        --min-size BYTES --leaf      skip the trivial ones; only functions that call nothing
     xbx asm --bytes <address>        also print the instruction bytes
 
 Call and jump targets that are function starts are shown as func_XXXXXXXX;
@@ -92,17 +95,35 @@ def main(argv=None):
     from . import project as project_module
     ap = argparse.ArgumentParser(prog='xbx asm', description=__doc__.splitlines()[0])
     ap.add_argument('addresses', nargs='*')
-    ap.add_argument('--small', type=int, metavar='N')
+    ap.add_argument('--small', type=int, metavar='N', help='the N smallest functions with no unit yet')
+    ap.add_argument('--list', type=int, metavar='N', help='the same choice as --small, one line each, no disassembly')
+    ap.add_argument('--from', dest='low', metavar='ADDR', help='with --small/--list: only functions at or after ADDR')
+    ap.add_argument('--to', dest='high', metavar='ADDR', help='with --small/--list: only functions before ADDR')
+    ap.add_argument('--min-size', type=int, default=0, help='with --small/--list: skip functions smaller than this')
+    ap.add_argument('--leaf', action='store_true', help='with --small/--list: only functions that call nothing')
+    ap.add_argument('--conv', action='store_true',
+                    help='with --small/--list: include functions with a custom calling convention (skipped by default)')
     ap.add_argument('--owner', default='game')
     ap.add_argument('--bytes', action='store_true')
     args = ap.parse_args(argv)
     try:
         project = project_module.current()
-        if args.small:
+        if args.small or args.list:
             done = {a for a, _ in project.units('matched')} | {a for a, _ in project.units('nonmatching')}
+            low = int(args.low, 16) if args.low else 0
+            high = int(args.high, 16) if args.high else 1 << 32
             rows = [r for r in project.rows.values()
-                    if r['owner'] == args.owner and r['kind'] == 'func' and r['_addr'] not in done]
-            addrs = [r['_addr'] for r in sorted(rows, key=lambda r: (r['_size'], r['_addr']))[:args.small]]
+                    if r['owner'] == args.owner and r['kind'] == 'func' and r['_addr'] not in done
+                    and low <= r['_addr'] < high and r['_size'] >= args.min_size
+                    and (args.conv or not r['conv']) and not (args.leaf and r['calls'])]
+            rows = sorted(rows, key=lambda r: (r['_size'], r['_addr']))[:args.small or args.list]
+            if args.list:
+                for r in rows:
+                    calls = r['calls'].split()
+                    print(f"{r['_addr']:08X}  {r['_size']:5} bytes  {len(calls):2} calls"
+                          + (f"  reads {r['conv']}" if r['conv'] else ''))
+                return
+            addrs = [r['_addr'] for r in rows]
         else:
             addrs = [int(a, 16) for a in args.addresses]
         if not addrs:
