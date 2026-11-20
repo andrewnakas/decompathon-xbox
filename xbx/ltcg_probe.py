@@ -23,6 +23,20 @@ PARTS = {'al': 'eax', 'ah': 'eax', 'ax': 'eax', 'bl': 'ebx', 'bh': 'ebx', 'bx': 
          'si': 'esi', 'di': 'edi'}
 
 
+def overwrites(mnemonic, ops):
+    """An instruction that names its register as a source but whose result does
+    not depend on it: xor/sub r, r (0), sbb r, r (0 or -1 from the carry flag),
+    or r, -1 and and r, 0."""
+    if len(ops) != 2 or ops[0].type != x86.X86_OP_REG:
+        return False
+    if ops[1].type == x86.X86_OP_REG:
+        return mnemonic in ('xor', 'sub', 'sbb') and ops[0].reg == ops[1].reg
+    if ops[1].type == x86.X86_OP_IMM:
+        imm = ops[1].imm & 0xFFFFFFFF
+        return (mnemonic, imm) in (('or', 0xFFFFFFFF), ('and', 0))
+    return False
+
+
 def entry_register_args(md, code, va):
     """The watched registers the function at va reads before writing."""
     written = set()
@@ -32,9 +46,7 @@ def entry_register_args(md, code, va):
             break
         read, write = ({PARTS.get(name, name) for name in map(md.reg_name, regs)} for regs in ins.regs_access())
         ops = ins.operands
-        zeroing = (ins.mnemonic == 'xor' and len(ops) == 2 and ops[0].type == ops[1].type == x86.X86_OP_REG
-                   and ops[0].reg == ops[1].reg)
-        if ins.mnemonic == 'push' or zeroing:
+        if ins.mnemonic == 'push' or overwrites(ins.mnemonic, ops):
             read = set()
         used = (read & WATCH) - written
         if used:
