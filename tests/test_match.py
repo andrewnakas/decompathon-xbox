@@ -250,3 +250,22 @@ def test_weak_default_named_by_an_undefined_entry():
     v = verdict(project, obj, unit)
     assert v.ok, v.problems
     assert v.covers == [0x11100]
+
+
+def test_an_unreferenced_inline_copy_is_dropped():
+    """An inline helper the compiler inlined everywhere still leaves its COMDAT
+    copy in the object; nothing refers to it, so the linker drops it."""
+    code = bytes.fromhex('b8 01000000 c3')                 # mov eax, 1; ret
+    helper = bytes.fromhex('8b 44 24 04 c3')               # the helper's own copy
+    project = new_project({FUNC: len(code)})
+    project.image.write(FUNC, code)
+    obj = coff.Coff(cofftool.build(
+        [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1),
+         dict(name='.text', data=helper, flags=cofftool.TEXT, comdat=2)],
+        [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION),
+         dict(name='?helper@@YAHH@Z', section=2, type=cofftool.FUNCTION)]))
+    v = verdict(project, obj, unit_for())
+    assert v.ok, v.problems
+    assert any('unreferenced COMDAT' in n for n in v.notes)
+    blocks = {b.name: b for b in obj.blocks()}
+    assert build_gate.link(project, obj, unit_for(), {blocks[FUNC_NAME].key: FUNC}) == [(FUNC, code)]

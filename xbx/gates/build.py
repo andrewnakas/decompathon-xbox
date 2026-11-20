@@ -51,7 +51,7 @@ def link(project, obj, unit, placement):
     out = []
     for block in obj.blocks():
         if block.key not in placement:
-            if block.size:
+            if block.size and not block.section.comdat:     # an unreferenced COMDAT is dropped by the linker
                 raise LinkError(f'{block.name} was never given an address')
             continue
         base = placement[block.key]

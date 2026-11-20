@@ -197,9 +197,14 @@ class Matcher:
                            'equals retail the table row is short (a maintainer fixes the table)')
                 (v.problems if self.strict else v.notes).append(message)
 
-        # nothing unverified may ride along
+        # nothing unverified may ride along. A COMDAT nothing refers to (the out-of-line copy of an inline
+        # helper the compiler inlined everywhere, and what only it refers to) never reaches the image: the
+        # linker drops unreferenced COMDATs
         for b in obj.blocks():
             if b.key in placed or b.size == 0:
+                continue
+            if b.section.comdat:
+                v.notes.append(f'{b.name}: an unreferenced COMDAT, which the linker drops')
                 continue
             what = 'code' if b.section.is_code else 'data'
             v.problems.append(f'unverified {what} in the object: {b.name} ({b.section.name}, {b.size} bytes) '
