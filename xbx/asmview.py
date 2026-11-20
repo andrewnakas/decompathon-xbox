@@ -82,9 +82,9 @@ def listing(project, addr, show_bytes=False):
         raw = f'{ins.bytes.hex():<22} ' if show_bytes else ''
         text = f'{ins.address:08x}  {raw}{ins.mnemonic:<7} {ins.op_str}'
         lines.append(text + (f'    ; {", ".join(n.strip() for n in notes)}' if notes else ''))
-    for off in range(end, size - 3, 4):
-        value, = struct.unpack_from('<I', data, off)
-        if addr <= value < addr + size:
+    for off in range(end, size, 4):     # a byte table may end in a partial row
+        value = struct.unpack_from('<I', data, off)[0] if off + 4 <= size else None
+        if value is not None and addr <= value < addr + size:
             lines.append(f'{addr + off:08x}  dd      {value:#x}')
         else:
             lines.append(f'{addr + off:08x}  db      ' + ' '.join(f'{b:02x}' for b in data[off:off + 4]))
