@@ -94,4 +94,9 @@ def test_scan_refusals():
         found = problems(text)
         assert any(expected in p for p in found), (text, found)
     assert problems('#pragma pack(push, 1)\nstruct A { char c; };\n#pragma pack(pop)\n') == []
+    # a member or variable of a type defined in place is a declaration
+    assert problems('struct A { union { float value; int bits; } depth; struct { int x; } pos[2]; };') == []
+    assert problems('enum { ONE, TWO } mode;') == []
+    # a block followed by a bare expression is still refused
+    assert any('bare expression' in p for p in problems('void f(int x) { if (x) { x++; } m_count; }'))
     assert any('fuzzy' in p for p in problems('int x;', tier='nonmatching'))

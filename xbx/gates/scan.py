@@ -72,6 +72,23 @@ def strip(text):
     return ''.join(out)
 
 
+TYPE_HEAD = re.compile(r'\b(?:struct|union|class|enum)\b[^;{}]*$')
+
+
+def declares(flat, at):
+    """Whether the statement starting at `at` names a member or variable of a
+    type defined just before it (`union { float f; int bits; } depth;`), which
+    is a declaration, not a bare expression."""
+    if not flat.startswith('}', at):
+        return False
+    depth = 0
+    for i in range(at, -1, -1):
+        depth += {'}': 1, '{': -1}.get(flat[i], 0)
+        if depth == 0:
+            return bool(TYPE_HEAD.search(flat[:i]))
+    return False
+
+
 def outside_parentheses(code):
     """code with everything inside parentheses blanked, so a `for (a; b; c)` header
     is not read as three statements."""
@@ -148,7 +165,7 @@ def scan_text(project, path, text, raw, tier):
             problems.append(f'#include {target}: no such header in the project\'s include directories')
     flat = outside_parentheses(code)
     for m in BARE.finditer(flat):
-        if m.group(1) not in BARE_OK:
+        if m.group(1) not in BARE_OK and not declares(flat, m.start()):
             problems.append(f'bare expression statement `{m.group(1)};` does nothing but steer the compiler')
     for m in SELF_ASSIGN.finditer(flat):
         if m.group(1) == m.group(2):
