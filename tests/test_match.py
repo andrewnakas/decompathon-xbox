@@ -269,3 +269,31 @@ def test_an_unreferenced_inline_copy_is_dropped():
     assert any('unreferenced COMDAT' in n for n in v.notes)
     blocks = {b.name: b for b in obj.blocks()}
     assert build_gate.link(project, obj, unit_for(), {blocks[FUNC_NAME].key: FUNC}) == [(FUNC, code)]
+
+
+
+def eh_case(parents):
+    """A function whose code refers to an exception-handling stub (section
+    .text$x) that retail has at 0x11800, a row listing `parents`."""
+    code = bytes.fromhex('b8 00000000 c3')                 # mov eax, offset stub; ret
+    stub = bytes.fromhex('b8 01000000 c3')
+    project = new_project({FUNC: len(code), 0x11800: len(stub)})
+    project.rows[0x11800].update(kind='eh', parent=parents)
+    project.image.write(FUNC, code[:1] + struct.pack('<I', 0x11800) + code[5:])
+    project.image.write(0x11800, stub)
+    obj = coff.Coff(cofftool.build(
+        [dict(name='.text', data=code, flags=cofftool.TEXT, comdat=1, relocs=[(1, '__unwind$1', coff.REL_DIR32)]),
+         dict(name='.text$x', data=stub, flags=cofftool.TEXT)],
+        [dict(name=FUNC_NAME, section=1, type=cofftool.FUNCTION),
+         dict(name='__unwind$1', section=2, type=cofftool.FUNCTION, storage=coff.CLASS_STATIC)]))
+    return verdict(project, obj, unit_for())
+
+
+def test_folded_eh_stub_with_several_parents():
+    """The linker folds identical exception-handling stubs of different
+    functions into one row, whose parent column lists all of them."""
+    v = eh_case('00010f00 00011000 00012000')
+    assert v.ok, v.problems
+    assert v.covers == [0x11800]
+    v = eh_case('00010f00 00012000')                       # a stub of other functions only
+    assert not v.ok and any('belongs to' in p for p in v.problems)

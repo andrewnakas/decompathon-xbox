@@ -295,7 +295,9 @@ class Matcher:
                     if wrong:
                         v.problems.append(f'{name}: exception-handling code would sit on the function at '
                                           f'{wrong[0]["_addr"]:#x}')
-                    strangers = [r for r in rows if r.get('parent') and int(r['parent'], 16) != unit.addr]
+                    # identical stubs of different functions are folded into one: a row lists every parent
+                    strangers = [r for r in rows if r.get('parent')
+                                 and unit.addr not in {int(a, 16) for a in r['parent'].split()}]
                     if strangers:
                         v.problems.append(f'{name}: exception-handling stub {strangers[0]["_addr"]:#x} belongs to '
                                           f'the function at {strangers[0]["parent"]}')
