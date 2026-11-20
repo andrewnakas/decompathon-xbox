@@ -35,6 +35,7 @@ xbx.toml:
     nonmatching = "src/nonmatching"
     unit_glob = "func_*.cpp"
     symbols = "config/symbols.csv"    # optional: name,addr rows shared by every unit
+    covered = "config/covered.csv"    # optional: functions matched units carry (xbx covers --write)
 
     [owners]
     headline = ["game"]               # owners the headline progress counts
@@ -109,6 +110,7 @@ class Project:
         self.nonmatching_dir = self.path(layout.get('nonmatching', 'src/nonmatching'))
         self.unit_glob = layout.get('unit_glob', 'func_*.cpp')
         self.symbols_csv = self.path(layout['symbols']) if layout.get('symbols') else None
+        self.covered_csv = self.path(layout.get('covered', 'config/covered.csv'))
         owners = c.get('owners', {})
         self.headline = list(owners.get('headline', ['game']))
         self.section_owners = dict(owners.get('sections', {}))
@@ -116,6 +118,22 @@ class Project:
         self.folded = frozenset(int(a, 16) for a in c.get('names', {}).get('folded', []))
         self.data_in_code = [(int(a, 16), int(b, 16)) for a, b in c.get('names', {}).get('data_in_code', [])]
         self.out = os.path.abspath(os.environ.get('XBX_OUT') or self.path('build/xbx'))
+
+    @staticmethod
+    def unit_address_of(path):
+        """The address a unit file is named for, or None."""
+        m = UNIT_ADDRESS.search(os.path.basename(path))
+        return int(m.group(1), 16) if m else None
+
+    @functools.cached_property
+    def covered(self):
+        """{address: unit} from the covered file: functions matched units carry along."""
+        out = {}
+        if os.path.exists(self.covered_csv):
+            with open(self.covered_csv, newline='', encoding='utf-8') as f:
+                for r in csv.DictReader(f):
+                    out[int(r['addr'], 16)] = r['unit']
+        return out
 
     def data_in_code_at(self, addr):
         """Whether addr is in data that a function keeps inside its own code."""

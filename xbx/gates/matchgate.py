@@ -55,6 +55,14 @@ def run(project):
                 report.problem(unit.path, f'{target:#x} is declared as {name} here and as {seen[0]} in '
                                           f'{project.relative(seen[1])}: one address, one declaration '
                                           '(use the same class, calling convention and types)')
+    # the covered file may only claim what a proven unit carries
+    from .. import covers
+    proven = covers.compute(project, compiler, {a: results[a] for a, _ in loaded})
+    for addr, unit in sorted(project.covered.items()):
+        if addr not in proven:
+            report.problem(project.relative(project.covered_csv),
+                           f'{addr:#x} is listed as carried by {unit}, but no proven unit carries it '
+                           '(a maintainer refreshes the file with `xbx covers --write`)')
     loose = tier_units(project, 'nonmatching')
     scored = verdicts(project, compiler, loose, strict=False)
     for addr, unit in loose:

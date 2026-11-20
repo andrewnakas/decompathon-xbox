@@ -109,7 +109,8 @@ def main(argv=None):
     try:
         project = project_module.current()
         if args.small or args.list:
-            done = {a for a, _ in project.units('matched')} | {a for a, _ in project.units('nonmatching')}
+            done = ({a for a, _ in project.units('matched')} | {a for a, _ in project.units('nonmatching')}
+                    | set(project.covered))
             low = int(args.low, 16) if args.low else 0
             high = int(args.high, 16) if args.high else 1 << 32
             rows = [r for r in project.rows.values()

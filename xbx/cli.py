@@ -18,6 +18,7 @@ COMMANDS = {
     'asm':        ('xbx.asmview', "print a function's retail disassembly"),
     'names':      ('xbx.names', 'the declarations the tree has settled on, by address'),
     'report':     ('xbx.report', 'write the objdiff-format progress report'),
+    'covers':     ('xbx.covers', 'the functions matched units carry along; --write records them'),
     'gate':       ('xbx.gates.run', 'run a merge gate: toolcheck, scan, split, match, build'),
     'score':      ('xbx.workbench.cli', 'workbench: score source variants of a function'),
     'diff':       ('xbx.workbench.cli', 'workbench: diagnose and show retail next to ours'),

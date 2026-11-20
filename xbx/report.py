@@ -40,6 +40,10 @@ def statuses(project):
         done[addr] = min(score if score is not None else 0.0, 99.9)
     for addr, _ in project.units('matched'):
         done[addr] = 100.0
+    matched = {addr for addr, _ in project.units('matched')}
+    for addr, unit in project.covered.items():     # carried by a matched unit; the match gate checks it
+        if addr in project.rows and project.unit_address_of(unit) in matched:
+            done[addr] = 100.0
     for row in project.rows.values():
         if row.get('kind') == 'eh':
             best = max((done.get(int(p, 16), 0.0) for p in row.get('parent', '').split()), default=0.0)

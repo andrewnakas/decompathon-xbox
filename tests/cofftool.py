@@ -113,6 +113,7 @@ class Project:
         self.shared_symbols = {}
         self.folded = frozenset()
         self.data_in_code = []
+        self.covered = {}
 
     def data_in_code_at(self, addr):
         return any(start <= addr < end for start, end in self.data_in_code)
